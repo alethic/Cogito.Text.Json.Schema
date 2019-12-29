@@ -1,6 +1,9 @@
-﻿namespace Cogito.Text.Json.Schema
+﻿using System;
+
+namespace Cogito.Text.Json.Schema
 {
 
+    [Flags]
     public enum JsonSchemaType
     {
 

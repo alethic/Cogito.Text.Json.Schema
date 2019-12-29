@@ -10,6 +10,7 @@ using Newtonsoft.Json;
 namespace Cogito.Text.Json.Schema.Tests.Validation
 {
 
+    [TestClass]
     public partial class JSchemaValidatorBuilderTestSuiteTests
     {
 
@@ -64,9 +65,12 @@ namespace Cogito.Text.Json.Schema.Tests.Validation
         }
 
         /// <summary>
-        /// Resolves from the remote directory.
+        /// Gets the settings to use for parsing JSON schema.
         /// </summary>
-        static JsonSchemaResolver Resolver { get; } = new JSchemaRemoteResolver(Path.Combine(Path.GetDirectoryName(typeof(JSchemaValidatorBuilderTestSuiteTests).Assembly.Location), "Validation"));
+        static JsonSchemaReaderSettings Settings { get; } = new JsonSchemaReaderSettings()
+        {
+            Resolver = new JSchemaRemoteResolver(Path.Combine(Path.GetDirectoryName(typeof(JSchemaValidatorBuilderTestSuiteTests).Assembly.Location), "Validation")),
+        };
 
         /// <summary>
         /// Parses the given token string value from base64.
@@ -83,9 +87,12 @@ namespace Cogito.Text.Json.Schema.Tests.Validation
         /// </summary>
         /// <param name="value"></param>
         /// <returns></returns>
-        static JsonSchema ParseSchema(string value)
+        static JsonSchema ParseSchema(string value, Uri schemaVersion)
         {
-            return JsonSchema.Load(new MemoryStream(Convert.FromBase64String(value)), resolver: Resolver);
+            var t = Encoding.UTF8.GetString(Convert.FromBase64String(value));
+            var z = Newtonsoft.Json.Linq.JObject.Parse(t);
+            z["$schema"] = schemaVersion;
+            return JsonSchema.Parse(z.ToString(), Settings);
         }
 
     }

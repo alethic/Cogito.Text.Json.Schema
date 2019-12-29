@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
@@ -12,34 +13,92 @@ namespace Cogito.Text.Json.Schema
     public class JsonSchema
     {
 
-        public static JsonSchema Parse(string value, JsonSerializerOptions options = null, JsonSchemaResolver resolver = null)
+        /// <summary>
+        /// Creates a new <see cref="JsonSchema"/> by parsing the specified string.
+        /// </summary>
+        /// <param name="value"></param>
+        /// <param name="settings"></param>
+        /// <returns></returns>
+        public static ValueTask<JsonSchema> ParseAsync(string value, JsonSchemaReaderSettings settings = null)
         {
-            return JsonSerializer.Deserialize<JsonSchema>(value, options);
+            return new JsonSchemaReader(settings).ReadAsync(JsonDocument.Parse(value));
         }
 
-        public static JsonSchema Load(ref Utf8JsonReader reader, JsonSerializerOptions options = null, JsonSchemaResolver resolver = null)
+        /// <summary>
+        /// Creates a new <see cref="JsonSchema"/> by parsing the specified string.
+        /// </summary>
+        /// <param name="value"></param>
+        /// <param name="settings"></param>
+        /// <returns></returns>
+        public static JsonSchema Parse(string value, JsonSchemaReaderSettings settings = null)
         {
-            return JsonSerializer.Deserialize<JsonSchema>(ref reader, options);
+            return new JsonSchemaReader(settings).Read(JsonDocument.Parse(value));
         }
 
-        public static async ValueTask<JsonSchema> LoadAsync(StreamReader reader, JsonSerializerOptions options = null, JsonSchemaResolver resolver = null)
+        /// <summary>
+        /// Loads a <see cref="JsonSchema"/> from the specified <see cref="Utf8JsonReader"/>.
+        /// </summary>
+        /// <param name="reader"></param>
+        /// <param name="settings"></param>
+        /// <returns></returns>
+        public static ValueTask<JsonSchema> LoadAsync(ref Utf8JsonReader reader, JsonSchemaReaderSettings settings = null)
         {
-            return JsonSerializer.Deserialize<JsonSchema>(await reader.ReadToEndAsync(), options);
+            return new JsonSchemaReader(settings).ReadAsync(ref reader);
         }
 
-        public static JsonSchema Load(StreamReader reader, JsonSerializerOptions options = null, JsonSchemaResolver resolver = null)
+        /// <summary>
+        /// Loads a <see cref="JsonSchema"/> from the specified <see cref="Utf8JsonReader"/>.
+        /// </summary>
+        /// <param name="reader"></param>
+        /// <param name="settings"></param>
+        /// <returns></returns>
+        public static JsonSchema Load(ref Utf8JsonReader reader, JsonSchemaReaderSettings settings = null)
         {
-            return JsonSerializer.Deserialize<JsonSchema>(reader.ReadToEnd(), options);
+            return new JsonSchemaReader(settings).Read(ref reader);
         }
 
-        public static ValueTask<JsonSchema> LoadAsync(Stream stream, JsonSerializerOptions options = null, JsonSchemaResolver resolver = null)
+        /// <summary>
+        /// Loads a <see cref="JsonSchema"/> from the specified <see cref="StringReader"/>.
+        /// </summary>
+        /// <param name="reader"></param>
+        /// <param name="settings"></param>
+        /// <returns></returns>
+        public static ValueTask<JsonSchema> LoadAsync(StreamReader reader, JsonSchemaReaderSettings settings = null)
         {
-            return JsonSerializer.DeserializeAsync<JsonSchema>(stream, options);
+            return new JsonSchemaReader(settings).ReadAsync(reader);
         }
 
-        public static JsonSchema Load(Stream stream, JsonSerializerOptions options = null, JsonSchemaResolver resolver = null)
+        /// <summary>
+        /// Loads a <see cref="JsonSchema"/> from the specified <see cref="StringReader"/>.
+        /// </summary>
+        /// <param name="reader"></param>
+        /// <param name="settings"></param>
+        /// <returns></returns>
+        public static JsonSchema Load(StreamReader reader, JsonSchemaReaderSettings settings = null)
         {
-            return Load(new StreamReader(stream), options, resolver);
+            return new JsonSchemaReader(settings).Read(reader);
+        }
+
+        /// <summary>
+        /// Loads a <see cref="JsonSchema"/> from the specified <see cref="Stream"/>.
+        /// </summary>
+        /// <param name="stream"></param>
+        /// <param name="settings"></param>
+        /// <returns></returns>
+        public static ValueTask<JsonSchema> LoadAsync(Stream stream, JsonSchemaReaderSettings settings = null)
+        {
+            return new JsonSchemaReader(settings).ReadAsync(stream);
+        }
+
+        /// <summary>
+        /// Loads a <see cref="JsonSchema"/> from the specified <see cref="Stream"/>.
+        /// </summary>
+        /// <param name="stream"></param>
+        /// <param name="settings"></param>
+        /// <returns></returns>
+        public static JsonSchema Load(Stream stream, JsonSchemaReaderSettings settings = null)
+        {
+            return new JsonSchemaReader(settings).Read(stream);
         }
 
         JsonSchemaCollection allOf;
@@ -174,6 +233,17 @@ namespace Cogito.Text.Json.Schema
         public bool? Valid { get; set; }
 
         public bool? WriteOnly { get; set; }
+
+        /// <summary>
+        /// Outputs a string version of this instance.
+        /// </summary>
+        /// <returns></returns>
+        public override string ToString()
+        {
+            var b = new StringWriter();
+            new JsonSchemaWriter().Write(b, this);
+            return b.ToString();
+        }
 
     }
 

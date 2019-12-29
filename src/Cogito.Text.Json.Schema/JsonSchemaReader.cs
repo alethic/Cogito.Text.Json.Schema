@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.Json;
+using System.Threading.Tasks;
 
 namespace Cogito.Text.Json.Schema
 {
@@ -38,12 +39,40 @@ namespace Cogito.Text.Json.Schema
         /// </summary>
         /// <param name="source"></param>
         /// <returns></returns>
+        public async ValueTask<JsonSchema> ReadAsync(JsonElement source)
+        {
+            var top = new JsonSchema();
+            var ctx = new JsonSchemaReaderContext(this, top);
+            LoadSchema(ctx, top, source);
+            await FinalizeAsync(ctx, top);
+            return top;
+        }
+
+        /// <summary>
+        /// Reads a schema starting at the specified element.
+        /// </summary>
+        /// <param name="source"></param>
+        /// <returns></returns>
         public JsonSchema Read(JsonElement source)
         {
             var top = new JsonSchema();
             var ctx = new JsonSchemaReaderContext(this, top);
-            Load(ctx, top, source);
+            LoadSchema(ctx, top, source);
+            Finalize(ctx, top);
             return top;
+        }
+
+        /// <summary>
+        /// Reads a schema from the specified document.
+        /// </summary>
+        /// <param name="source"></param>
+        /// <returns></returns>
+        public ValueTask<JsonSchema> ReadAsync(JsonDocument source)
+        {
+            if (source is null)
+                throw new ArgumentNullException(nameof(source));
+
+            return ReadAsync(source.RootElement);
         }
 
         /// <summary>
@@ -64,6 +93,16 @@ namespace Cogito.Text.Json.Schema
         /// </summary>
         /// <param name="reader"></param>
         /// <returns></returns>
+        public ValueTask<JsonSchema> ReadAsync(ref Utf8JsonReader reader)
+        {
+            return ReadAsync(JsonDocument.ParseValue(ref reader).RootElement);
+        }
+
+        /// <summary>
+        /// Reads a schema from the specified reader.
+        /// </summary>
+        /// <param name="reader"></param>
+        /// <returns></returns>
         public JsonSchema Read(ref Utf8JsonReader reader)
         {
             return Read(JsonDocument.ParseValue(ref reader).RootElement);
@@ -74,8 +113,33 @@ namespace Cogito.Text.Json.Schema
         /// </summary>
         /// <param name="source"></param>
         /// <returns></returns>
-        public JsonSchema Read(ReadOnlySpan<byte> source, Encoding encoding)
+        public ValueTask<JsonSchema> ReadAsync(ReadOnlySpan<byte> source, Encoding encoding = null)
         {
+            if (encoding == null)
+                encoding = settings.DefaultEncoding;
+
+            if (encoding == Encoding.UTF8)
+            {
+                var rdr = new Utf8JsonReader(source);
+                return ReadAsync(ref rdr);
+            }
+            else
+            {
+                throw new NotImplementedException();
+            }
+        }
+
+        /// <summary>
+        /// Reads a schema from the specified span of bytes.
+        /// </summary>
+        /// <param name="source"></param>
+        /// <param name="encoding"></param>
+        /// <returns></returns>
+        public JsonSchema Read(ReadOnlySpan<byte> source, Encoding encoding = null)
+        {
+            if (encoding == null)
+                encoding = settings.DefaultEncoding;
+
             if (encoding == Encoding.UTF8)
             {
                 var rdr = new Utf8JsonReader(source);
@@ -92,12 +156,34 @@ namespace Cogito.Text.Json.Schema
         /// </summary>
         /// <param name="source"></param>
         /// <returns></returns>
-        public JsonSchema Read(ReadOnlySequence<byte> source, Encoding encoding)
+        public ValueTask<JsonSchema> ReadAsync(ReadOnlySequence<byte> source, Encoding encoding = null)
         {
+            if (encoding == null)
+                encoding = settings.DefaultEncoding;
+
             if (encoding == Encoding.UTF8)
             {
-                var rdr = new Utf8JsonReader(source);
-                return Read(ref rdr);
+                return ReadAsync(JsonDocument.Parse(source));
+            }
+            else
+            {
+                throw new NotImplementedException();
+            }
+        }
+
+        /// <summary>
+        /// Reads a schema from the specified span of bytes.
+        /// </summary>
+        /// <param name="source"></param>
+        /// <returns></returns>
+        public JsonSchema Read(ReadOnlySequence<byte> source, Encoding encoding = null)
+        {
+            if (encoding == null)
+                encoding = settings.DefaultEncoding;
+
+            if (encoding == Encoding.UTF8)
+            {
+                return Read(JsonDocument.Parse(source));
             }
             else
             {
@@ -111,14 +197,19 @@ namespace Cogito.Text.Json.Schema
         /// <param name="source"></param>
         /// <param name="encoding"></param>
         /// <returns></returns>
-        public JsonSchema Read(Stream source, Encoding encoding)
+        public async ValueTask<JsonSchema> ReadAsync(Stream source, Encoding encoding = null)
         {
+            if (source is null)
+                throw new ArgumentNullException(nameof(source));
+
+            if (encoding == null)
+                encoding = settings.DefaultEncoding;
+
             if (encoding == Encoding.UTF8)
             {
                 var buf = new MemoryStream();
-                source.CopyTo(buf);
-                var rdr = new Utf8JsonReader(buf.ToArray().AsSpan());
-                return Read(ref rdr);
+                await source.CopyToAsync(buf);
+                return await ReadAsync(buf.ToArray().AsSpan(), encoding);
             }
             else
             {
@@ -127,13 +218,96 @@ namespace Cogito.Text.Json.Schema
         }
 
         /// <summary>
-        /// Reads a schema from the specified <see cref="StreamReader"/>.
+        /// Reads a schema from the specified <see cref="Stream"/> encoded with the specified encoding.
+        /// </summary>
+        /// <param name="source"></param>
+        /// <param name="encoding"></param>
+        /// <returns></returns>
+        public JsonSchema Read(Stream source, Encoding encoding = null)
+        {
+            if (source is null)
+                throw new ArgumentNullException(nameof(source));
+
+            if (encoding == null)
+                encoding = settings.DefaultEncoding;
+
+            if (encoding == Encoding.UTF8)
+            {
+                var buf = new MemoryStream();
+                source.CopyTo(buf);
+                return Read(buf.ToArray().AsSpan(), encoding);
+            }
+            else
+            {
+                throw new NotImplementedException();
+            }
+        }
+
+        /// <summary>
+        /// Reads a schema from the specified <see cref="TextReader"/>.
         /// </summary>
         /// <param name="source"></param>
         /// <returns></returns>
-        public JsonSchema Read(StreamReader source)
+        public async ValueTask<JsonSchema> ReadAsync(TextReader source)
         {
-            throw new NotImplementedException();
+            if (source is null)
+                throw new ArgumentNullException(nameof(source));
+
+            var stm = new MemoryStream();
+            var buf = new char[1024];
+            int len;
+            while ((len = await source.ReadBlockAsync(buf, 0, 1024)) > -1)
+            {
+                var tmp = Encoding.UTF8.GetBytes(buf, 0, len);
+                stm.Write(tmp, 0, tmp.Length);
+            }
+            stm.Position = 0;
+
+            return await ReadAsync(stm, Encoding.UTF8);
+        }
+
+        /// <summary>
+        /// Reads a schema from the specified <see cref="TextReader"/>.
+        /// </summary>
+        /// <param name="source"></param>
+        /// <returns></returns>
+        public JsonSchema Read(TextReader source)
+        {
+            if (source is null)
+                throw new ArgumentNullException(nameof(source));
+
+            var stm = new MemoryStream();
+            var buf = new char[1024];
+            int len;
+            while ((len = source.ReadBlock(buf, 0, 1024)) > -1)
+            {
+                var tmp = Encoding.UTF8.GetBytes(buf, 0, len);
+                stm.Write(tmp, 0, tmp.Length);
+            }
+            stm.Position = 0;
+
+            return Read(stm, Encoding.UTF8);
+        }
+
+        /// <summary>
+        /// Initializes the finalization of the loaded schema, potentially resolving external references.
+        /// </summary>
+        /// <param name="context"></param>
+        /// <param name="schema"></param>
+        /// <returns></returns>
+        ValueTask FinalizeAsync(JsonSchemaReaderContext context, JsonSchema schema)
+        {
+            return new ValueTask(Task.CompletedTask);
+        }
+
+        /// <summary>
+        /// Initializes the finalization of the loaded schema, potentially resolving external references.
+        /// </summary>
+        /// <param name="context"></param>
+        /// <param name="schema"></param>
+        void Finalize(JsonSchemaReaderContext context, JsonSchema schema)
+        {
+
         }
 
         /// <summary>
@@ -142,27 +316,11 @@ namespace Cogito.Text.Json.Schema
         /// <param name="context"></param>
         /// <param name="source"></param>
         /// <returns></returns>
-        JsonSchema Read(JsonSchemaReaderContext context, JsonElement source)
+        JsonSchema ReadSchema(JsonSchemaReaderContext context, JsonElement source)
         {
             var schema = new JsonSchema();
-            Load(context, schema, source);
+            LoadSchema(context, schema, source);
             return schema;
-        }
-
-        /// <summary>
-        /// Reads a new schema within the same context.
-        /// </summary>
-        /// <param name="context"></param>
-        /// <param name="source"></param>
-        /// <returns></returns>
-        JsonSchema ReadOrNull(JsonSchemaReaderContext context, JsonElement source)
-        {
-            return source.ValueKind switch
-            {
-                JsonValueKind.Null => null,
-                JsonValueKind.Object => Read(context, source),
-                _ => throw new JsonSchemaReaderException(),
-            };
         }
 
         /// <summary>
@@ -171,23 +329,43 @@ namespace Cogito.Text.Json.Schema
         /// <param name="context"></param>
         /// <param name="schema"></param>
         /// <param name="source"></param>
-        void Load(JsonSchemaReaderContext context, JsonSchema schema, JsonElement source)
+        void LoadSchema(JsonSchemaReaderContext context, JsonSchema schema, JsonElement source)
         {
             switch (source.ValueKind)
             {
                 case JsonValueKind.True:
                     schema.Valid = true;
-                    return;
+                    break;
                 case JsonValueKind.False:
                     schema.Valid = false;
-                    return;
+                    break;
                 case JsonValueKind.Object:
-                    foreach (var property in source.EnumerateObject())
-                        LoadProperty(context, schema, source, property);
+                    LoadSchemaObject(context, schema, source);
                     break;
                 default:
                     throw new JsonSchemaReaderException("Error reading schema.");
             }
+        }
+
+        /// <summary>
+        /// Loads the data from a schema
+        /// </summary>
+        /// <param name="context"></param>
+        /// <param name="schema"></param>
+        /// <param name="source"></param>
+        void LoadSchemaObject(JsonSchemaReaderContext context, JsonSchema schema, JsonElement source)
+        {
+            // version should be loaded first to allow usage for processing
+            if (source.TryGetProperty("$schema", out var _schema))
+                LoadSchema(context, schema, source, _schema);
+
+            // id is rather important
+            if (source.TryGetProperty("$id", out var _id))
+                LoadId(context, schema, source, _id);
+
+            // handle remaining properties
+            foreach (var property in source.EnumerateObject())
+                LoadSchemaProperty(context, schema, source, property);
         }
 
         /// <summary>
@@ -197,10 +375,13 @@ namespace Cogito.Text.Json.Schema
         /// <param name="schema"></param>
         /// <param name="source"></param>
         /// <param name="property"></param>
-        void LoadProperty(JsonSchemaReaderContext context, JsonSchema schema, JsonElement source, JsonProperty property)
+        void LoadSchemaProperty(JsonSchemaReaderContext context, JsonSchema schema, JsonElement source, JsonProperty property)
         {
             switch (property.Name)
             {
+                case "$schema":
+                case "$id":
+                    break;
                 case "additionalItems":
                     LoadAdditionalItems(context, schema, source, property.Value);
                     break;
@@ -254,9 +435,6 @@ namespace Cogito.Text.Json.Schema
                     break;
                 case "format":
                     LoadFormat(context, schema, source, property.Value);
-                    break;
-                case "$id":
-                    LoadId(context, schema, source, property.Value);
                     break;
                 case "if":
                     LoadIf(context, schema, source, property.Value);
@@ -318,9 +496,6 @@ namespace Cogito.Text.Json.Schema
                 case "required":
                     LoadRequired(context, schema, source, property.Value);
                     break;
-                case "$schema":
-                    LoadSchema(context, schema, source, property.Value);
-                    break;
                 case "then":
                     LoadThen(context, schema, source, property.Value);
                     break;
@@ -359,7 +534,7 @@ namespace Cogito.Text.Json.Schema
             {
                 case JsonValueKind.Array:
                     foreach (var i in source.EnumerateArray())
-                        list.Add(Read(context, i));
+                        list.Add(ReadSchema(context, i));
                     break;
                 default:
                     throw new JsonSchemaReaderException();
@@ -378,7 +553,7 @@ namespace Cogito.Text.Json.Schema
                     break;
                 case JsonValueKind.Object:
                     schema.AllowAdditionalItems = true;
-                    schema.AdditionalItems = Read(context, value);
+                    schema.AdditionalItems = ReadSchema(context, value);
                     break;
                 default:
                     throw new JsonSchemaReaderException();
@@ -397,7 +572,7 @@ namespace Cogito.Text.Json.Schema
                     break;
                 case JsonValueKind.Object:
                     schema.AllowAdditionalProperties = true;
-                    schema.AdditionalProperties = Read(context, value);
+                    schema.AdditionalProperties = ReadSchema(context, value);
                     break;
                 default:
                     throw new JsonSchemaReaderException();
@@ -421,7 +596,7 @@ namespace Cogito.Text.Json.Schema
 
         void LoadContains(JsonSchemaReaderContext context, JsonSchema schema, JsonElement source, JsonElement value)
         {
-            schema.Contains = Read(context, value);
+            schema.Contains = ReadSchema(context, value);
         }
 
         void LoadContentEncoding(JsonSchemaReaderContext context, JsonSchema schema, JsonElement source, JsonElement value)
@@ -487,7 +662,7 @@ namespace Cogito.Text.Json.Schema
 
         void LoadSchemaDependency(JsonSchemaReaderContext context, JsonSchema schema, JsonElement value1, string name, JsonElement item)
         {
-            schema.Dependencies[name] = Read(context, item);
+            schema.Dependencies[name] = ReadSchema(context, item);
         }
 
         void LoadDescription(JsonSchemaReaderContext context, JsonSchema schema, JsonElement source, JsonElement value)
@@ -501,7 +676,46 @@ namespace Cogito.Text.Json.Schema
 
         void LoadDisallow(JsonSchemaReaderContext context, JsonSchema schema, JsonElement source, JsonElement value)
         {
-            throw new NotImplementedException();
+            var not = new JsonSchema();
+
+            switch (value.ValueKind)
+            {
+                case JsonValueKind.String:
+                    not.AnyOf.Add(new JsonSchema() { Type = ParseTypeElement(value) });
+                    break;
+                case JsonValueKind.Array:
+                    foreach (var item in value.EnumerateArray())
+                        LoadDisallowItem(context, schema, not, item);
+                    break;
+                default:
+                    throw new JsonSchemaReaderException();
+            }
+
+            // did we compile any additional conditions?
+            if (not.AnyOf.Count > 0)
+            {
+                // add existing condition
+                if (schema.Not != null)
+                    not.AnyOf.Add(schema.Not);
+
+                // replace existing not
+                schema.Not = not;
+            }
+        }
+
+        void LoadDisallowItem(JsonSchemaReaderContext context, JsonSchema schema, JsonSchema not, JsonElement item)
+        {
+            switch (item.ValueKind)
+            {
+                case JsonValueKind.String:
+                    not.AnyOf.Add(new JsonSchema() { Type = ParseTypeElement(item) });
+                    break;
+                case JsonValueKind.Object:
+                    not.AnyOf.Add(ReadSchema(context, item));
+                    break;
+                default:
+                    throw new JsonSchemaReaderException();
+            }
         }
 
         void LoadDivisibleBy(JsonSchemaReaderContext context, JsonSchema schema, JsonElement source, JsonElement value)
@@ -511,7 +725,7 @@ namespace Cogito.Text.Json.Schema
 
         void LoadElse(JsonSchemaReaderContext context, JsonSchema schema, JsonElement source, JsonElement value)
         {
-            schema.Else = Read(context, value);
+            schema.Else = ReadSchema(context, value);
         }
 
         void LoadEnum(JsonSchemaReaderContext context, JsonSchema schema, JsonElement source, JsonElement value)
@@ -583,7 +797,7 @@ namespace Cogito.Text.Json.Schema
 
         void LoadIf(JsonSchemaReaderContext context, JsonSchema schema, JsonElement source, JsonElement value)
         {
-            schema.If = Read(context, value);
+            schema.If = ReadSchema(context, value);
         }
 
         void LoadItems(JsonSchemaReaderContext context, JsonSchema schema, JsonElement source, JsonElement value)
@@ -594,12 +808,12 @@ namespace Cogito.Text.Json.Schema
             {
                 case JsonValueKind.Object:
                     schema.ItemsPositionValidation = false;
-                    schema.Items.Add(Read(context, value));
+                    schema.Items.Add(ReadSchema(context, value));
                     break;
                 case JsonValueKind.Array:
                     schema.ItemsPositionValidation = true;
                     foreach (var item in value.EnumerateArray())
-                        schema.Items.Add(Read(context, item));
+                        schema.Items.Add(ReadSchema(context, item));
                     break;
                 default:
                     throw new JsonSchemaReaderException();
@@ -689,7 +903,8 @@ namespace Cogito.Text.Json.Schema
 
         void LoadNot(JsonSchemaReaderContext context, JsonSchema schema, JsonElement source, JsonElement value)
         {
-            schema.Not = Read(context, value);
+            var s = ReadSchema(context, value);
+            schema.Not = schema.Not is null ? s : new JsonSchema() { AllOf = { schema.Not, s } };
         }
 
         void LoadOneOf(JsonSchemaReaderContext context, JsonSchema schema, JsonElement source, JsonElement value)
@@ -714,7 +929,7 @@ namespace Cogito.Text.Json.Schema
             {
                 case JsonValueKind.Object:
                     foreach (var property in value.EnumerateObject())
-                        schema.PatternProperties[property.Name] = Read(context, property.Value);
+                        schema.PatternProperties[property.Name] = ReadSchema(context, property.Value);
                     break;
                 default:
                     throw new JsonSchemaReaderException();
@@ -729,11 +944,22 @@ namespace Cogito.Text.Json.Schema
             {
                 case JsonValueKind.Object:
                     foreach (var property in value.EnumerateObject())
-                        schema.Properties[property.Name] = Read(context, property.Value);
+                        LoadProperty(context, schema, source, property);
                     break;
                 default:
                     throw new JsonSchemaReaderException();
             }
+        }
+
+        void LoadProperty(JsonSchemaReaderContext context, JsonSchema schema, JsonElement source, JsonProperty property)
+        {
+            // draft-3: nested properties may contain 'required'
+            if (property.Value.ValueKind == JsonValueKind.Object)
+                if (property.Value.TryGetProperty("required", out var _r))
+                    if (_r.ValueKind == JsonValueKind.True)
+                        schema.Required.Add(property.Name);
+
+            schema.Properties[property.Name] = ReadSchema(context, property.Value);
         }
 
         void LoadPropertyNames(JsonSchemaReaderContext context, JsonSchema schema, JsonElement source, JsonElement value)
@@ -741,7 +967,7 @@ namespace Cogito.Text.Json.Schema
             switch (value.ValueKind)
             {
                 case JsonValueKind.Object:
-                    schema.PropertyNames = Read(context, value);
+                    schema.PropertyNames = ReadSchema(context, value);
                     break;
                 default:
                     throw new JsonSchemaReaderException();
@@ -778,6 +1004,10 @@ namespace Cogito.Text.Json.Schema
                     foreach (var i in value.EnumerateArray())
                         LoadRequiredItem(context, schema, i);
                     break;
+                case JsonValueKind.True:
+                case JsonValueKind.False:
+                    // draft-3: applies to parent object
+                    break;
                 default:
                     throw new JsonSchemaReaderException();
             }
@@ -807,7 +1037,7 @@ namespace Cogito.Text.Json.Schema
 
         void LoadThen(JsonSchemaReaderContext context, JsonSchema schema, JsonElement source, JsonElement value)
         {
-            schema.Then = Read(context, value);
+            schema.Then = ReadSchema(context, value);
         }
 
         void LoadTitle(JsonSchemaReaderContext context, JsonSchema schema, JsonElement source, JsonElement value)
@@ -822,46 +1052,68 @@ namespace Cogito.Text.Json.Schema
 
         void LoadType(JsonSchemaReaderContext context, JsonSchema schema, JsonElement source, JsonElement value)
         {
-            schema.Type = GetTypeFromElement(value);
+            schema.Type = ParseTypeElement(value);
         }
 
-        JsonSchemaType? GetTypeFromElement(JsonElement value)
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="value"></param>
+        /// <returns></returns>
+        JsonSchemaType? ParseTypeElement(JsonElement value)
         {
             return value.ValueKind switch
             {
                 JsonValueKind.Null => null,
-                JsonValueKind.String => GetTypeFromString(value.GetString()),
-                JsonValueKind.Array => GetTypeFromArrayElement(value),
+                JsonValueKind.String => StringToType(value.GetString()),
+                JsonValueKind.Array => ParseTypeArrayElement(value),
                 _ => throw new JsonSchemaReaderException(),
             };
         }
 
-        JsonSchemaType? GetTypeFromArrayElement(JsonElement value)
+        /// <summary>
+        /// Parses an element that is an array of type names.
+        /// </summary>
+        /// <param name="value"></param>
+        /// <returns></returns>
+        JsonSchemaType? ParseTypeArrayElement(JsonElement value)
         {
             var t = (JsonSchemaType?)JsonSchemaType.None;
 
             foreach (var o in value.EnumerateArray())
                 t |= o.ValueKind switch
                 {
-                    JsonValueKind.String => GetTypeFromString(o.GetString()),
+                    JsonValueKind.String => StringToType(o.GetString()),
                     _ => throw new JsonSchemaReaderException(),
                 };
 
             return t;
         }
 
-        JsonSchemaType? GetTypeFromString(string value)
+        /// <summary>
+        /// Converts the specified string value into a <see cref="JsonSchemaType"/>.
+        /// </summary>
+        /// <param name="value"></param>
+        /// <returns></returns>
+        JsonSchemaType? StringToType(string value)
         {
             return value switch
             {
                 "array" => JsonSchemaType.Array,
                 "boolean" => JsonSchemaType.Boolean,
                 "integer" => JsonSchemaType.Integer,
-                "none" => JsonSchemaType.None,
                 "null" => JsonSchemaType.Null,
                 "number" => JsonSchemaType.Number,
                 "object" => JsonSchemaType.Object,
                 "string" => JsonSchemaType.String,
+                "any" =>
+                    JsonSchemaType.Array |
+                    JsonSchemaType.Boolean |
+                    JsonSchemaType.Integer |
+                    JsonSchemaType.Null |
+                    JsonSchemaType.Number |
+                    JsonSchemaType.Object |
+                    JsonSchemaType.String,
                 _ => throw new JsonSchemaReaderException(),
             };
         }

@@ -96,10 +96,8 @@ void WriteTestFile(Uri version, FileInfo file, string suiteName, string category
         [TestCategory("<#= categoryName #>")]
         public void Test_<#= Escape(suiteName) #>__<#= Escape(categoryName) #>__<#= Escape(d) #><#= i > 1 ? "_" + i.ToString() : "" #>__<#= Escape(d2) #><#= j > 1 ? "_" + j.ToString() : "" #>()
         {
-            var s = ParseSchema("<#= EncodeToken(s) #>");
+            var s = ParseSchema("<#= EncodeToken(s) #>", new Uri("<#= version #>"));
             var t = ParseElement("<#= EncodeToken(t2) #>");
-
-            s.SchemaVersion = new Uri("<#= version #>");
 
 <#+
             if (v2)
