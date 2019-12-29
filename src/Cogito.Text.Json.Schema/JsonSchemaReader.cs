@@ -738,7 +738,14 @@ namespace Cogito.Text.Json.Schema
 
         void LoadPropertyNames(JsonSchemaReaderContext context, JsonSchema schema, JsonElement source, JsonElement value)
         {
-            throw new NotImplementedException();
+            switch (value.ValueKind)
+            {
+                case JsonValueKind.Object:
+                    schema.PropertyNames = Read(context, value);
+                    break;
+                default:
+                    throw new JsonSchemaReaderException();
+            }
         }
 
         void LoadReadOnly(JsonSchemaReaderContext context, JsonSchema schema, JsonElement source, JsonElement value)
