@@ -448,25 +448,25 @@ namespace Cogito.Text.Json.Schema
                 case "maximum":
                     LoadMaximum(context, schema, source, property.Value);
                     break;
-                case "maximumItems":
+                case "maxItems":
                     LoadMaximumItems(context, schema, source, property.Value);
                     break;
                 case "maxLength":
                     LoadMaximumLength(context, schema, source, property.Value);
                     break;
-                case "maximumProperties":
+                case "maxProperties":
                     LoadMaximumProperties(context, schema, source, property.Value);
                     break;
                 case "minimum":
                     LoadMinimum(context, schema, source, property.Value);
                     break;
-                case "minimumItems":
+                case "minItems":
                     LoadMinimumItems(context, schema, source, property.Value);
                     break;
                 case "minLength":
                     LoadMinimumLength(context, schema, source, property.Value);
                     break;
-                case "minimumProperties":
+                case "minProperties":
                     LoadMinimumProperties(context, schema, source, property.Value);
                     break;
                 case "multipleOf":

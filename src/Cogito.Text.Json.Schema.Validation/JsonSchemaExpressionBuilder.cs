@@ -779,16 +779,13 @@ namespace Cogito.Text.Json.Schema.Validation
             return IfThenElseTrue(
                 IsTokenType(o, JsonValueKind.Object),
                 Expression.LessThanOrEqual(
-                    Expression.Call(
-                        typeof(Enumerable),
-                        nameof(Enumerable.Count),
-                        new Type[] { typeof(JsonElement) },
-                        Expression.Convert(
-                            Expression.Call(
-                                o,
-                                nameof(JsonElement.EnumerateObject),
-                                new Type[0]),
-                            typeof(IEnumerable<JsonElement>))),
+                    Expression.Convert(
+                        Expression.Call(
+                            typeof(JsonElementEqualityExtensions),
+                            nameof(JsonElementEqualityExtensions.GetPropertyCount),
+                            new Type[0],
+                            o),
+                        typeof(long)),
                     Expression.Constant((long)schema.MaximumProperties)));
         }
 
@@ -884,16 +881,13 @@ namespace Cogito.Text.Json.Schema.Validation
             return IfThenElseTrue(
                 IsTokenType(o, JsonValueKind.Object),
                 Expression.GreaterThanOrEqual(
-                    Expression.Call(
-                        typeof(Enumerable),
-                        nameof(Enumerable.Count),
-                        new Type[] { typeof(JsonElement) },
-                        Expression.Convert(
-                            Expression.Call(
-                                o,
-                                nameof(JsonElement.EnumerateObject),
-                                new Type[0]),
-                            typeof(IEnumerable<JsonElement>))),
+                    Expression.Convert(
+                        Expression.Call(
+                            typeof(JsonElementEqualityExtensions),
+                            nameof(JsonElementEqualityExtensions.GetPropertyCount),
+                            new Type[0],
+                            o),
+                        typeof(long)),
                     Expression.Constant((long)schema.MinimumProperties)));
         }
 
@@ -941,7 +935,10 @@ namespace Cogito.Text.Json.Schema.Validation
 
             return IfThenElseTrue(
                 IsTokenType(o, JsonValueKind.String),
-                CallThis(nameof(Pattern), Expression.Constant(schema.Pattern), Expression.Convert(o, typeof(string))));
+                CallThis(
+                    nameof(Pattern),
+                    Expression.Constant(schema.Pattern),
+                    Expression.Call(o, nameof(JsonElement.GetString), new Type[0])));
         }
 
         static bool Pattern(string pattern, string value)

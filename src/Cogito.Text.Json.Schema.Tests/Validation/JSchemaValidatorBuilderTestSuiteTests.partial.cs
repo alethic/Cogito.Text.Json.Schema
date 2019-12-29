@@ -90,9 +90,19 @@ namespace Cogito.Text.Json.Schema.Tests.Validation
         static JsonSchema ParseSchema(string value, Uri schemaVersion)
         {
             var t = Encoding.UTF8.GetString(Convert.FromBase64String(value));
-            var z = Newtonsoft.Json.Linq.JObject.Parse(t);
-            z["$schema"] = schemaVersion;
-            return JsonSchema.Parse(z.ToString(), Settings);
+            var z = Newtonsoft.Json.Linq.JToken.Parse(t);
+
+            // set schema version on object if possible
+            if (z is Newtonsoft.Json.Linq.JObject o)
+                o["$schema"] = schemaVersion;
+
+            // generate schema object
+            var w = new StringWriter();
+            z.WriteTo(new JsonTextWriter(w));
+
+            var s = JsonSchema.Parse(w.ToString(), Settings);
+            s.SchemaVersion = schemaVersion;
+            return s;
         }
 
     }
