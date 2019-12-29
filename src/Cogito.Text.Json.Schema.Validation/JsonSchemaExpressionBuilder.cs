@@ -156,11 +156,21 @@ namespace Cogito.Text.Json.Schema.Validation
         /// <returns></returns>
         static bool IsSchemaTypeFunc(JsonSchema schema, JsonElement o, JsonSchemaType t)
         {
-            // checking that value is an integer, but not checking that it is a number, requires the value be even
-            if (o.ValueKind == JsonValueKind.Number && (t & JsonSchemaType.Integer) != 0 && (t & JsonSchemaType.Number) == 0 && o.GetDecimal() % 1 != 0m)
-                return false;
-            else
-                return (t & SchemaTypeForTokenType(o.ValueKind)) != 0;
+            // test for integer, but not number
+            if (o.ValueKind == JsonValueKind.Number && (t & JsonSchemaType.Integer) != 0 && (t & JsonSchemaType.Number) == 0)
+            {
+                // draft 3 and 4 restrict test to integer-like values
+                if (schema.SchemaVersion == Constants.SchemaVersions.Draft3 ||
+                    schema.SchemaVersion == Constants.SchemaVersions.Draft4)
+                    if (o.TryGetInt64(out var _) == false)
+                        return false;
+
+                // otherwise, just check if it has no remainder
+                if (o.GetDouble() % 1 != 0)
+                    return false;
+            }
+
+            return (t & SchemaTypeForTokenType(o.ValueKind)) != 0;
         }
 
         /// <summary>
