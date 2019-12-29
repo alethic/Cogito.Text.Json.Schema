@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 
 using Cogito.Text.Json.Schema.Validation;
 

@@ -10,7 +10,6 @@ using Newtonsoft.Json;
 namespace Cogito.Text.Json.Schema.Tests.Validation
 {
 
-    [TestClass]
     public partial class JSchemaValidatorBuilderTestSuiteTests
     {
 

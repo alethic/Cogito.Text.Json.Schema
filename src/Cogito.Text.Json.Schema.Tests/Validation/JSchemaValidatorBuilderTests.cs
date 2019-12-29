@@ -2,14 +2,12 @@
 using System.Diagnostics;
 using System.IO;
 using System.Text.Json;
+
 using Cogito.Text.Json.Schema.Validation;
 
 using FluentAssertions;
 
 using Microsoft.VisualStudio.TestTools.UnitTesting;
-
-using Newtonsoft.Json.Linq;
-using Newtonsoft.Json.Schema;
 
 namespace Cogito.Text.Json.Schema.Tests.Validation
 {
