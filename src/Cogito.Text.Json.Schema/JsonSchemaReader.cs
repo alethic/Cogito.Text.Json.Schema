@@ -433,6 +433,9 @@ namespace Cogito.Text.Json.Schema
                 case "exclusiveMinimum":
                     LoadExclusiveMinimum(context, schema, source, property.Value);
                     break;
+                case "extends":
+                    LoadExtends(context, schema, source, property.Value);
+                    break;
                 case "format":
                     LoadFormat(context, schema, source, property.Value);
                     break;
@@ -448,7 +451,7 @@ namespace Cogito.Text.Json.Schema
                 case "maximumItems":
                     LoadMaximumItems(context, schema, source, property.Value);
                     break;
-                case "maximumLength":
+                case "maxLength":
                     LoadMaximumLength(context, schema, source, property.Value);
                     break;
                 case "maximumProperties":
@@ -460,7 +463,7 @@ namespace Cogito.Text.Json.Schema
                 case "minimumItems":
                     LoadMinimumItems(context, schema, source, property.Value);
                     break;
-                case "minimumLength":
+                case "minLength":
                     LoadMinimumLength(context, schema, source, property.Value);
                     break;
                 case "minimumProperties":
@@ -528,8 +531,6 @@ namespace Cogito.Text.Json.Schema
         /// <param name="source"></param>
         void LoadSchemaListFromArray(JsonSchemaReaderContext context, IList<JsonSchema> list, JsonElement source)
         {
-            list.Clear();
-
             switch (source.ValueKind)
             {
                 case JsonValueKind.Array:
@@ -681,7 +682,7 @@ namespace Cogito.Text.Json.Schema
             switch (value.ValueKind)
             {
                 case JsonValueKind.String:
-                    not.AnyOf.Add(new JsonSchema() { Type = ParseTypeElement(value) });
+                    schema.AllOf.Add(new JsonSchema() { Not = new JsonSchema() { Type = ParseTypeElement(value) } });
                     break;
                 case JsonValueKind.Array:
                     foreach (var item in value.EnumerateArray())
@@ -690,17 +691,6 @@ namespace Cogito.Text.Json.Schema
                 default:
                     throw new JsonSchemaReaderException();
             }
-
-            // did we compile any additional conditions?
-            if (not.AnyOf.Count > 0)
-            {
-                // add existing condition
-                if (schema.Not != null)
-                    not.AnyOf.Add(schema.Not);
-
-                // replace existing not
-                schema.Not = not;
-            }
         }
 
         void LoadDisallowItem(JsonSchemaReaderContext context, JsonSchema schema, JsonSchema not, JsonElement item)
@@ -708,10 +698,10 @@ namespace Cogito.Text.Json.Schema
             switch (item.ValueKind)
             {
                 case JsonValueKind.String:
-                    not.AnyOf.Add(new JsonSchema() { Type = ParseTypeElement(item) });
+                    schema.AllOf.Add(new JsonSchema() { Not = new JsonSchema() { Type = ParseTypeElement(item) } });
                     break;
                 case JsonValueKind.Object:
-                    not.AnyOf.Add(ReadSchema(context, item));
+                    schema.AllOf.Add(new JsonSchema() { Not = ReadSchema(context, item) });
                     break;
                 default:
                     throw new JsonSchemaReaderException();
@@ -771,6 +761,22 @@ namespace Cogito.Text.Json.Schema
                 case JsonValueKind.Number:
                     schema.Minimum = value.GetDouble();
                     schema.ExclusiveMinimum = true;
+                    break;
+                default:
+                    throw new JsonSchemaReaderException();
+            }
+        }
+
+        void LoadExtends(JsonSchemaReaderContext context, JsonSchema schema, JsonElement source, JsonElement value)
+        {
+            switch (value.ValueKind)
+            {
+                case JsonValueKind.Object:
+                    schema.AllOf.Add(ReadSchema(context, value));
+                    break;
+                case JsonValueKind.Array:
+                    foreach (var item in value.EnumerateArray())
+                        schema.AllOf.Add(ReadSchema(context, item));
                     break;
                 default:
                     throw new JsonSchemaReaderException();
@@ -1052,7 +1058,40 @@ namespace Cogito.Text.Json.Schema
 
         void LoadType(JsonSchemaReaderContext context, JsonSchema schema, JsonElement source, JsonElement value)
         {
-            schema.Type = ParseTypeElement(value);
+            var typeContainsSchema = false;
+            if (value.ValueKind == JsonValueKind.Array)
+                foreach (var item in value.EnumerateArray())
+                    if (item.ValueKind == JsonValueKind.Object)
+                        typeContainsSchema = true;
+
+            if (typeContainsSchema)
+                LoadTypeWithSchema(context, schema, source, value);
+            else
+                schema.Type = ParseTypeElement(value);
+        }
+
+        void LoadTypeWithSchema(JsonSchemaReaderContext context, JsonSchema schema, JsonElement source, JsonElement value)
+        {
+            var l = new JsonSchema();
+
+            // collect string values, which are just type indicators
+            var t = JsonSchemaType.None;
+            foreach (var item in value.EnumerateArray())
+                if (item.ValueKind == JsonValueKind.String)
+                    t |= ParseTypeElement(item) ?? JsonSchemaType.None;
+
+            // some type was specified, include as possible condition
+            if (t != JsonSchemaType.None)
+                l.AnyOf.Add(new JsonSchema() { Type = t });
+
+            // collect object values, which are schemas
+            foreach (var item in value.EnumerateArray())
+                if (item.ValueKind == JsonValueKind.Object)
+                    l.AnyOf.Add(ReadSchema(context, item));
+
+            // associate type selection with target schema
+            if (l.AnyOf.Count > 0)
+                schema.AllOf.Add(l);
         }
 
         /// <summary>

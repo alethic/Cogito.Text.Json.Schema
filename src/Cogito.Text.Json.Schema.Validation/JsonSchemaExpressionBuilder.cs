@@ -98,7 +98,7 @@ namespace Cogito.Text.Json.Schema.Validation
         /// <param name="o"></param>
         /// <returns></returns>
         static Expression StringLength(Expression o) =>
-            CallThis(nameof(StringLengthMethod), Expression.Convert(o, typeof(string)));
+            CallThis(nameof(StringLengthMethod), Expression.Call(o, nameof(JsonElement.GetString), new Type[0]));
 
         /// <summary>
         /// Gets the string length.
@@ -156,16 +156,11 @@ namespace Cogito.Text.Json.Schema.Validation
         /// <returns></returns>
         static bool IsSchemaTypeFunc(JsonSchema schema, JsonElement o, JsonSchemaType t)
         {
-            if (schema.SchemaVersion == Constants.SchemaVersions.Draft3 ||
-                schema.SchemaVersion == Constants.SchemaVersions.Draft4)
-                if (o.ValueKind == JsonValueKind.Number && (t & JsonSchemaType.Integer) != 0 && o.GetDouble() % 1 == 0)
-                    return false;
-
-            //  handle cases of floating point values, tested against integer, that are actually even integers
-            if (o.ValueKind == JsonValueKind.Number && (t & JsonSchemaType.Integer) != 0 && o.GetDouble() % 1 == 0)
-                return true;
-
-            return (t & SchemaTypeForTokenType(o.ValueKind)) != 0;
+            // checking that value is an integer, but not checking that it is a number, requires the value be even
+            if (o.ValueKind == JsonValueKind.Number && (t & JsonSchemaType.Integer) != 0 && (t & JsonSchemaType.Number) == 0 && o.GetDecimal() % 1 != 0m)
+                return false;
+            else
+                return (t & SchemaTypeForTokenType(o.ValueKind)) != 0;
         }
 
         /// <summary>
@@ -477,14 +472,14 @@ namespace Cogito.Text.Json.Schema.Validation
                             IsTokenType(o, JsonValueKind.String),
                             CallThis(
                                 nameof(ContentBase64),
-                                Expression.Convert(o, typeof(string)),
+                                Expression.Call(o, nameof(JsonElement.GetString), new Type[0]),
                                 Expression.Constant(schema.ContentMediaType, typeof(string))));
                 case null:
                     return IfThenElseTrue(
                         IsTokenType(o, JsonValueKind.String),
                         CallThis(
                             nameof(ContentMediaTypeString),
-                            Expression.Convert(o, typeof(string)),
+                            Expression.Call(o, nameof(JsonElement.GetString), new Type[0]),
                             Expression.Constant(schema.ContentMediaType, typeof(string))));
                 default:
                     return null;
@@ -908,7 +903,7 @@ namespace Cogito.Text.Json.Schema.Validation
                 return null;
 
             return IfThenElseTrue(
-                IsSchemaType(schema, o, JsonSchemaType.Integer | JsonSchemaType.Number),
+                IsTokenType(o, JsonValueKind.Number),
                 CallThis(nameof(MultipleOf),
                     o,
                     Expression.Constant((double)schema.MultipleOf)));
@@ -991,9 +986,10 @@ namespace Cogito.Text.Json.Schema.Validation
 
             w.WriteEndArray();
             w.Dispose();
+            s.Position = 0;
 
             using (var d = JsonDocument.Parse(s))
-                foreach (var i in o.EnumerateArray())
+                foreach (var i in d.RootElement.EnumerateArray())
                     if (!schema(i))
                         return false;
 
