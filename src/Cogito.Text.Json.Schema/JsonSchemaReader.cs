@@ -814,6 +814,8 @@ namespace Cogito.Text.Json.Schema
 
             switch (value.ValueKind)
             {
+                case JsonValueKind.True:
+                case JsonValueKind.False:
                 case JsonValueKind.Object:
                     schema.ItemsPositionValidation = false;
                     schema.Items.Add(ReadSchema(context, value));
