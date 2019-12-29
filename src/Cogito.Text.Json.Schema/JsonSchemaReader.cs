@@ -648,6 +648,8 @@ namespace Cogito.Text.Json.Schema
                 case JsonValueKind.Array:
                     LoadPropertyDependency(context, schema, value, property.Name, property.Value);
                     break;
+                case JsonValueKind.True:
+                case JsonValueKind.False:
                 case JsonValueKind.Object:
                     LoadSchemaDependency(context, schema, value, property.Name, property.Value);
                     break;
