@@ -1,7 +1,10 @@
-# Cogito.Json.Schema
-JSON schema support for System.Text.Json.
+# Cogito.Text.Json.Schema
 
-## Cogito.Json.Schema.Validation
+Various utilities for working with JSON schema. Contains a very fast validator.
 
-Contains a fast validator for JSON schema, on top of `System.Text.Json`. The validator is implemented as an `Expression` tree builder. It takes a `JsonSchema` object, and generates an `Expression` that implements the validation when invoked against a `JsonElement` from `System.Text.Json`.
+## Packages
 
+| Package | Version |
+| --- | --- |
+| [Cogito.Json.Schema](https://www.nuget.org/packages/Cogito.Json.Schema) | [![NuGet](https://img.shields.io/nuget/v/Cogito.Json.Schema.svg)](https://www.nuget.org/packages/Cogito.Json.Schema) |
+| [Cogito.Json.Schema.Validation](https://www.nuget.org/packages/Cogito.Json.Schema.Validation) | [![NuGet](https://img.shields.io/nuget/v/Cogito.Json.Schema.Validation.svg)](https://www.nuget.org/packages/Cogito.Json.Schema.Validation) |
